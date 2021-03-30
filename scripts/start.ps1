@@ -1,0 +1,1 @@
+Start-Process Powershell.exe -Argumentlist "-NoExit -file ./runjupyter.ps1"
