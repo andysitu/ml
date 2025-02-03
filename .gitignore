@@ -125,3 +125,7 @@ dmypy.json
 .pyre/
 
 my_logs
+
+# data files
+*.csv
+*.tgz
