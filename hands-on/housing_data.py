@@ -217,13 +217,99 @@ from sklearn.preprocessing import MinMaxScaler
 
 min_max_scaler = MinMaxScaler(feature_range=(-1,1))
 housing_num_min_max_scaled = min_max_scaler.fit_transform(housing_num)
-
+# Standard scaler
 from sklearn.preprocessing import StandardScaler
 std_scaler = StandardScaler()
 # subtract by mean value and deivde by standard deviation.
 # does not restrict values to secpfic range bu less afected by outliers
 housing_num_std_scaled = std_scaler.fit_transform(housing_num)
 
+# radial basis function - mos common is Gaussian RBF
+from sklearn.metrics.pairwise import rbf_kernel
+age_siml_35 =  rbf_kernel(housing[["housing_median_age"]], [[35]], gamma=0.1)
+
+
+# feature scaling
+
 from sklearn.linear_model import LinearRegression
 
 target_scaler = StandardScaler()
+
+scaled_labels = target_scaler.fit_transform(housing_labels.to_frame())
+
+model = LinearRegression()
+model.fit(housing[["median_income"]], scaled_labels)
+some_new_data = housing[["median_income"]].iloc[:5] # pretend this is new data
+
+# the prediction is the log of the median house value because it's 
+# scaled, so inverse_transform will transform it to the median value
+
+scaled_predictions = model.predict(some_new_data)
+predictions = target_scaler.inverse_transform(scaled_predictions)
+
+
+# TransformedTargetRegressor will do it all for you automatically
+from sklearn.compose import TransformedTargetRegressor
+model = TransformedTargetRegressor(LinearRegression(), transformer=StandardScaler())
+model.fit(housing[["median_income"]], housing_labels)
+predictions = model.predict(some_new_data)
+
+
+# Create a log transform - often used for heavy-tailed distribution of data so ml doens't like it
+# replacing it with their logarithm value makes it more distributed
+
+from sklearn.preprocessing import FunctionTransformer
+log_transformer = FunctionTransformer(np.log, inverse_func=np.exp)
+log_pop = log_transformer.transform(housing[["population"]])
+
+# inverse_func argument is optional - for example if you will use TransformedTargetRegressor
+
+# can take hyperparameters as additional arguments (eg using Gaussian RBF)
+rbf_transformer = FunctionTransformer(rbf_kernel, kw_args=dict(Y=[[35.]], gamma=0.1))
+age_simil_35 = rbf_transformer.transform(housing[["housing_median_age"]])
+
+# no inversion for RBF kernel since there are 2 values at given distance from fixed point
+
+# rbf_kernel does not treat features separately
+# if passed array with 2 features, it will measure the 2D distance (Euclidean)
+sf_coords = 37.7749, -122.41
+sf_transformer = FunctionTransformer(rbf_kernel,
+                                   kw_args=dic(Y=[sf_coords], gamma=0.1))
+sf_siml = sf_transformer.transform(housing[["latitude", "longitude"]])
+
+# custom transformers can also combine features
+ratio_transformer = FunctionTransformer(lambda X: X[:, [0]] / X[:, [1]])
+ratio_transformer.transform(np.array[[1,2], [3,4]])
+
+
+# use custom class for a trainable transformer
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_array, check_is_fitted
+
+class StandardScalerClone(BaseEstimator, TransformerMixin):
+    # no *args or **kwargs
+    def __init__(self, with_mean=True):
+        self.with_mean = with_mean
+
+    def fit(self, X, y=None):  # y is required even if not used
+        X = check_array(X)  # checks that X is an array with finite float values
+        self.mean_ = X.mean(axis=0)
+        self.scale_ = X.std(axis=0)
+        self.n_features_in_ = X.shape[1]  # every estimator stores this in fit()
+        return self  # always return self!
+
+    def transform(self, X):
+        check_is_fitted(self)  # looks for learned attributes (with trailing _)
+        X = check_array(X)
+        assert self.n_features_in_ == X.shape[1]
+        if self.with_mean:
+            X = X - self.mean_
+        return X / self.scale_
+    
+
+# custom transformer can use other estimators
+
+# customer transformer that uses KMeans clusterer in fit()
+# to idenify main clusters in training data and rbf_kernel in
+# transform() to measure how similar each sample is to cluster center
