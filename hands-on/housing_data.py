@@ -274,38 +274,41 @@ age_simil_35 = rbf_transformer.transform(housing[["housing_median_age"]])
 # if passed array with 2 features, it will measure the 2D distance (Euclidean)
 sf_coords = 37.7749, -122.41
 sf_transformer = FunctionTransformer(rbf_kernel,
-                                   kw_args=dic(Y=[sf_coords], gamma=0.1))
+                                   kw_args=dict(Y=[sf_coords], gamma=0.1))
 sf_siml = sf_transformer.transform(housing[["latitude", "longitude"]])
 
 # custom transformers can also combine features
 ratio_transformer = FunctionTransformer(lambda X: X[:, [0]] / X[:, [1]])
-ratio_transformer.transform(np.array[[1,2], [3,4]])
+ratio_transformer.transform(np.array([[1., 2.], [3., 4.]]))
 
 
 # use custom class for a trainable transformer
 
-from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.utils.validation import check_array, check_is_fitted
+# BaseEstimator and avoid *args and **kwargs - gets get_params and set_params()
+# TransformerMixin gets fit_transform which calls fit() and then transform()
 
-class StandardScalerClone(BaseEstimator, TransformerMixin):
-    # no *args or **kwargs
-    def __init__(self, with_mean=True):
-        self.with_mean = with_mean
+# from sklearn.base import BaseEstimator, TransformerMixin
+# from sklearn.utils.validation import check_array, check_is_fitted
 
-    def fit(self, X, y=None):  # y is required even if not used
-        X = check_array(X)  # checks that X is an array with finite float values
-        self.mean_ = X.mean(axis=0)
-        self.scale_ = X.std(axis=0)
-        self.n_features_in_ = X.shape[1]  # every estimator stores this in fit()
-        return self  # always return self!
+# class StandardScalerClone(BaseEstimator, TransformerMixin):
+#     # no *args or **kwargs
+#     def __init__(self, with_mean=True):
+#         self.with_mean = with_mean
 
-    def transform(self, X):
-        check_is_fitted(self)  # looks for learned attributes (with trailing _)
-        X = check_array(X)
-        assert self.n_features_in_ == X.shape[1]
-        if self.with_mean:
-            X = X - self.mean_
-        return X / self.scale_
+#     def fit(self, X, y=None):  # y is required even if not used
+#         X = check_array(X)  # checks that X is an array with finite float values
+#         self.mean_ = X.mean(axis=0)
+#         self.scale_ = X.std(axis=0)
+#         self.n_features_in_ = X.shape[1]  # every estimator stores this in fit()
+#         return self  # always return self!
+
+#     def transform(self, X):
+#         check_is_fitted(self)  # looks for learned attributes (with trailing _)
+#         X = check_array(X)
+#         assert self.n_features_in_ == X.shape[1]
+#         if self.with_mean:
+#             X = X - self.mean_
+#         return X / self.scale_
     
 
 # custom transformer can use other estimators
@@ -313,3 +316,47 @@ class StandardScalerClone(BaseEstimator, TransformerMixin):
 # customer transformer that uses KMeans clusterer in fit()
 # to idenify main clusters in training data and rbf_kernel in
 # transform() to measure how similar each sample is to cluster center
+
+# from sklearn.cluster import KMeans
+
+# class ClusterSimilarity(BaseEstimator, TransformerMixin):
+#     def __init__(self, n_clusters=1, gamma=1.0, random_state=None):
+#         self.n_clusters = n_clusters
+#         self.gamma = gamma
+#         self.random_state = random_state
+
+#     def fit(self, X, y=None, sample_weight=None):
+#         self.kmeans_ = KMeans(self.n_clusters, random_state=self.random_state)
+#         self.kmeans_.fit(X, sample_weight=sample_weight)
+#         return self
+    
+#     def transform(self, X):
+#         # gaussian centered fitting around cluster centers and find out similiarity
+#         return rbf_kernel(X, self.kmeans_.cluster_centers_, gamma=self.gamma)
+    
+#     def get_feature_names_out(self, names=None):
+#         return [f"Cluster {i} similarity" for i in range(self.n_clusters)]
+
+# # compares with the 10 clusters with Gaussian RBF to compare geographic similarity
+# cluster_simil = ClusterSimilarity(n_clusters=10,gamma=1,random_state=30)
+# similarities = cluster_simil.fit_transform(housing[["latitude", "longitude"]],
+#                 sample_weight=housing_labels)
+
+# print(similarities[:3].round(2))
+
+
+# transformation pipelines
+
+from sklearn.pipeline import Pipeline
+
+# names can be anything but must be unique. esimators must all be transformers
+# except last one which can be transformer, predictor, or estimator
+num_pipeline = Pipeline([
+    ("impute", SimpleImputer(strategy="median")),
+    ("standardize", StandardScaler())
+])
+
+# use make_pipeline will name it for you
+from sklearn.pipeline import make_pipeline
+
+num_pipeline = make_pipeline(SimpleImputer(strategy="median"), StandardScaler())
